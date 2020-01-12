@@ -44,8 +44,8 @@ def gen_data():
 
 
     d = {}
-    # for idx in tqdm(range(len(high_res_images))):
-    for idx in tqdm(range(1)):
+    for idx in tqdm(range(len(high_res_images))):
+    # for idx in tqdm(range(1)):
         high_res_img_path = os.path.join(high_res_directory, high_res_images[idx])
         high_res_img = io.imread(high_res_img_path).astype(np.uint8)
         high_res_height, high_res_width, _  = high_res_img.shape
