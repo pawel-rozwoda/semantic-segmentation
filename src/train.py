@@ -1,7 +1,7 @@
 from load import MyDataset
 from tqdm import trange, tqdm
 from torch.utils.data import DataLoader
-from torchvision import transforms, utils
+# from torchvision import transforms, utils
 import torch
 from torch import nn
 import numpy as np
@@ -27,8 +27,11 @@ print(len(validation_dataset))
 
 # activation_f = nn.ReLU()
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print('Using device:', device)
 
 model = SomeModel()
+model = model.to(device)
 
 epochs = 1
 lr = 0.0001
@@ -69,6 +72,10 @@ for epoch in tqdm(range(epochs)):
     for step, (X, y) in enumerate(train_loader):
         y=y.type(torch.float)
         X = X.permute(0,3,1,2)
+
+        X = X.to(device)
+        y = y.to(device)
+        
 
         pred = model.forward(X) 
         loss = soft_dice_loss(y, pred) 
