@@ -1,6 +1,8 @@
 from torch import nn
+import torch
+from torchsummary import summary
 
-activation_f = nn.Tanh()
+activation_f = nn.ReLU()
 
 class SomeModel(nn.Module):
 
@@ -8,21 +10,24 @@ class SomeModel(nn.Module):
         super(SomeModel,self).__init__()
 
         self.initial_block = nn.Sequential(
-            nn.Conv2d(3, 16 , kernel_size=3),
+            nn.Conv2d(in_channels=3, out_channels=128 , kernel_size=3,padding = 1),
             activation_f,
-            nn.Conv2d(16 , 48, kernel_size=3),
-            activation_f, 
-            nn.Conv2d(48 , 168, kernel_size=3),
-            activation_f, 
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(in_channels=128, out_channels=256 , kernel_size=3,padding = 1),
+            activation_f,
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(in_channels=256, out_channels=512 , kernel_size=3, padding=1),
+            activation_f,
+            nn.MaxPool2d(kernel_size=2)
         ) 
 
         self.final_block = nn.Sequential(
-            nn.ConvTranspose2d(168, 48,kernel_size=3),
+            nn.ConvTranspose2d(in_channels=512, out_channels=256 , kernel_size=3, stride=2),
             activation_f,
-            nn.ConvTranspose2d(48, 16,kernel_size=3),
+            nn.ConvTranspose2d(in_channels=256, out_channels=128 , kernel_size=2, stride=2),
             activation_f,
-            nn.ConvTranspose2d(16, 4 ,kernel_size=3),
-            nn.Sigmoid()
+            nn.ConvTranspose2d(in_channels=128, out_channels=4 , kernel_size=2, stride=2),
+            activation_f,
         ) 
 
     def forward(self,x_):
@@ -30,3 +35,6 @@ class SomeModel(nn.Module):
         x = self.final_block(x)
 
         return x 
+
+# m=SomeModel()
+# summary(m, (3,140,140))
