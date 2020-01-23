@@ -1,107 +1,123 @@
 from load import MyDataset
 from tqdm import trange, tqdm
 from torch.utils.data import DataLoader
-# from torchvision import transforms, utils
 import torch
 from torch import nn
 import numpy as np
-from model import SomeModel
+import pandas as pd
+from torch.optim.lr_scheduler import StepLR
+from aux import soft_dice_loss
+from datetime import datetime
+import os
+import shutil
 
-# batch_size=512
 batch_size=32
 TRAIN_PARTITION = 0.8
 
+now = datetime.now()
+model_path = now.strftime("model_%m|%d|%Y--%H:%M:%S/")
+if os.path.exists(model_path):
+    shutil.rmtree(model_path)
+    
+os.makedirs(model_path)
+
 TRAIN_PATH = '../data/sliced_train_images'
 LABEL_PATH = '../data/sliced.csv'
+# TRAIN_PATH = '../data/small_sliced_train_images'
+# LABEL_PATH = '../data/small_sliced.csv'
 
-train_dataset = MyDataset(train_dir=TRAIN_PATH, labels=LABEL_PATH, train=True, train_partition=TRAIN_PARTITION)
-
+train_dataset = MyDataset(train_dir=TRAIN_PATH, labels=LABEL_PATH, train=True, train_partition=TRAIN_PARTITION) 
 validation_dataset = MyDataset(train_dir=TRAIN_PATH, labels=LABEL_PATH, train=False, train_partition=TRAIN_PARTITION)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
 validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
-print(len(train_dataset))
-print(len(validation_dataset))
-
-
-
-# activation_f = nn.ReLU()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-model = SomeModel()
+model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet',
+    in_channels=3, out_channels=4, init_features=32)
+
 model = model.to(device)
 
-epochs = 1
-lr = 0.0001
+epochs = 10
+initial_lr = 0.008
 
-optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=initial_lr)
 
+scheduler = StepLR(optimizer, step_size=1, gamma=0.7)
 
-
-def soft_dice_loss(y_true, y_pred, epsilon=1e-6):
-    '''
-    Soft dice loss calculation for arbitrary batch size, number of classes, and number of spatial dimensions.
-    Assumes the `channels_last` format.
-
-    # Arguments
-        y_true: b x X x Y( x Z...) x c One hot encoding of ground truth
-        y_pred: b x X x Y( x Z...) x c Network output, must sum to 1 over c channel (such as after softmax)
-        epsilon: Used for numerical stability to avoid divide by zero errors
-
-    # References
-        V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation
-        https://arxiv.org/abs/1606.04797
-        More details on Dice loss formulation
-        https://mediatum.ub.tum.de/doc/1395260/1395260.pdf (page 72)
-
-        Adapted from https://github.com/Lasagne/Recipes/issues/99#issuecomment-347775022
-    '''
-
-    # skip the batch and class axis for calculating Dice score
-    axes = tuple(range(1, len(y_pred.shape)-1))
-    numerator = 2. * torch.sum(y_pred * y_true, axes)
-    # denominator = torch.sum(torch.square(y_pred) + torch.square(y_true), axes)
-    denominator = torch.sum(y_pred**2 + y_true**2, axes)
-
-    return 1. - torch.mean(numerator / (denominator + epsilon)) # average over classes and batch
-
+bce = nn.BCELoss() 
 
 for epoch in tqdm(range(epochs)):
-    for step, (X, y) in enumerate(train_loader):
-        y=y.type(torch.float)
-        X = X.permute(0,3,1,2)
-
+    print('lr:', scheduler.get_lr())
+    for step, (X, y) in tqdm(enumerate(train_loader)):
+        y=y.type(torch.float) 
         X = X.to(device)
-        y = y.to(device)
-        
+        y = y.to(device) 
 
         pred = model.forward(X) 
-        loss = soft_dice_loss(y, pred) 
+        loss = soft_dice_loss(pred, y) + bce(pred, y) 
         optimizer.zero_grad()   
         loss.backward()         
         optimizer.step()        
 
 
-
+    test_losses = []
+    train_losses = []
     with torch.no_grad():
+        dice_loss = [] 
+        bce_loss = []
         loss_v = []
-
         for X, y in validation_loader:
-            y=y.type(torch.float)
-            X = X.permute(0,3,1,2)
+            # y=y.type(torch.float)
+            X = X.to(device)
+            y = y.to(device)
             pred = model.forward(X)
-            loss_v.append(soft_dice_loss(y, pred).item())
+            loss_v.append(soft_dice_loss(pred, y).item() + bce(pred, y).item())
+            dice_loss.append(soft_dice_loss(pred,y).item())
+            bce_loss.append(bce(pred,y).item())
 
-        print(loss_v)
-        print(np.mean(loss_v))
+
+        dice_loss = np.mean(dice_loss)
+        bce_loss = np.mean(bce_loss)
         loss_v = np.mean(loss_v)
-        # loss_values.append((epoch, loss_v))
+        test_losses.append((epoch, loss_v, dice_loss, bce_loss))
 
-        print('epoka:, ', epoch)
-        print('loss: ', loss_v)
+        
+    with torch.no_grad(): 
+        dice_loss = [] 
+        bce_loss = []
+        loss_v = []
+        for X, y in train_loader:
+            # y=y.type(torch.float)
+            X = X.to(device)
+            y = y.to(device)
+            pred = model.forward(X)
+            loss_v.append(soft_dice_loss(pred, y).item() + bce(pred, y).item())
+            dice_loss.append(soft_dice_loss(pred,y).item())
+            bce_loss.append(bce(pred,y).item())
 
 
-# torch.save(model, "./model.pt")
-torch.save(model.state_dict(), 'model_dict.pt')
+        dice_loss = np.mean(dice_loss)
+        bce_loss = np.mean(bce_loss)
+        loss_v = np.mean(loss_v)
+        train_losses.append((epoch, loss_v, dice_loss, bce_loss))
+
+
+    with open(model_path+"test_losses.csv", "a") as myfile:
+        myfile.write(','.join(map(str, test_losses)) + '\n')
+
+    with open(model_path+"train_losses.csv", "a") as myfile:
+        myfile.write(','.join(map(str, train_losses)) + '\n')
+
+    scheduler.step() 
+
+
+    torch.save(model.state_dict(), model_path+"model_epoch_" + str(epoch) +"_dict.pt") 
+
+# test_df = pd.DataFrame(test_losses, columns=['epoch', 'total_loss', 'dice_loss', 'bce_loss'])  
+# train_df = pd.DataFrame(train_losses, columns=['epoch', 'total_loss', 'dice_loss', 'bce_loss'])  
+
+# test_df.to_csv(model_path+'test_loss.csv', index=False)
+# train_df.to_csv(model_path+'train_loss.csv', index=False)

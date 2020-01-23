@@ -10,10 +10,12 @@ import numpy as np
 SLICE_HEIGHT = 140
 SLICE_WIDTH = 140
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = SomeModel()
 # model.load_state_dict(torch.load('model_dict.pt'))
-model.load_state_dict(torch.load('model_dict.pt', map_location=lambda storage, loc: storage))
-
+# model.load_state_dict(torch.load('model_dict.pt', map_location=lambda storage, loc: storage))
+model = torch.load('model_epoch_4.pt') 
+model = model.to(device)
 model.eval()
 
 
@@ -22,6 +24,7 @@ LABEL_PATH = "../data/train.csv"
 TRAIN_PARTITION = 0.8
 
 prediction_dataset = MyDataset(train_dir=PREDICT_PATH, labels=LABEL_PATH, train=False, train_partition=TRAIN_PARTITION)
+print(device)
 
 for sample, _ in prediction_dataset:
     blank_image = Image.new('RGB', (2100, 1400))
@@ -35,6 +38,7 @@ for sample, _ in prediction_dataset:
                 col_pix = j*SLICE_WIDTH
                 aux_img = sample[:, row_pix:row_pix + SLICE_HEIGHT, col_pix:col_pix + SLICE_WIDTH]
                 aux_img = torch.Tensor(aux_img).unsqueeze(0)
+                aux_img = aux_img.to(device)
                 pred = model(torch.Tensor(aux_img))
                 pred = pred.squeeze(0)
                 pred = pred.permute(1,2,0)
