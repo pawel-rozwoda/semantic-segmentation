@@ -52,7 +52,6 @@ bce = nn.BCELoss()
 for epoch in tqdm(range(epochs)):
     print('lr:', scheduler.get_lr())
     for step, (X, y) in tqdm(enumerate(train_loader)):
-        y=y.type(torch.float) 
         X = X.to(device)
         y = y.to(device) 
 
@@ -70,7 +69,6 @@ for epoch in tqdm(range(epochs)):
         bce_loss = []
         loss_v = []
         for X, y in validation_loader:
-            # y=y.type(torch.float)
             X = X.to(device)
             y = y.to(device)
             pred = model.forward(X)
