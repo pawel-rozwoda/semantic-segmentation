@@ -19,7 +19,8 @@
 ## 4. Dane
 ### a) Pobrać dane ze strony konkursu kaggla
 ### b) Rozpakować dane do katalogu data/ (na tym samym poziomie co src albo README.md).
-### c) Uruchomić `python gen_data.py` w katalogu src. To polecenie pokroi obrazki wraz z plikiem csv masek do nowych plików.
+### c) Rozpakować plik z danymi treningowymi do katalogu train_images/
+### d) Uruchomić `python gen_data.py` w katalogu src. To polecenie pokroi obrazki wraz z plikiem csv masek do nowych plików.
 
 
 ## Trenowanie modelu
